@@ -244,6 +244,30 @@ int wiiuse_os_poll(struct wiimote_t **wm, int wiimotes)
     return evnt;
 }
 
+int wiiuse_os_poll_single(wiimote* wm)
+{
+    if (!wm) {
+        return 0;
+    }
+
+    byte read_buffer[MAX_PAYLOAD] = {0}; // empty buffer
+    int evnt = 0;
+
+    wm->event = WIIUSE_NONE;
+    if (wiiuse_os_read(wm, read_buffer[0], sizeof(read_buffer))) 
+    {
+        propagate_event(wm, read_buffer[0], read_buffer + 1);
+        evnt += (wm->event != WIIUSE_NONE);
+    } 
+    else
+    {
+        wiiuse_send_next_pending_write_request(wm);
+        idle_cycle(wm);
+    }
+
+    return evnt;
+}
+
 int wiiuse_os_read(struct wiimote_t *wm, byte *buf, int len)
 {
     DWORD b, r;

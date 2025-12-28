@@ -929,6 +929,7 @@ WIIUSE_EXPORT extern void wiiuse_disconnect(struct wiimote_t *wm);
 
 /* events.c */
 WIIUSE_EXPORT extern int wiiuse_poll(struct wiimote_t **wm, int wiimotes);
+WIIUSE_EXPORT extern int wiiuse_poll_single(wiimote *wm);
 
 /**
  *  @brief Poll Wiimotes, and call the provided callback with information
