@@ -459,13 +459,8 @@ static void interpret_ir_data(struct wiimote_t *wm)
 {
     struct ir_dot_t *dot = wm->ir.dot;
     int i;
-    float roll        = 0.0f;
     int last_num_dots = wm->ir.num_dots;
 
-    if (WIIMOTE_IS_SET(wm, WIIMOTE_STATE_ACC))
-    {
-        roll = wm->orient.roll;
-    }
 
     /* count visible dots */
     wm->ir.num_dots = 0;
@@ -496,114 +491,19 @@ static void interpret_ir_data(struct wiimote_t *wm)
         return;
     }
     case 1:
-    {
-        fix_rotated_ir_dots(wm->ir.dot, roll);
-
-        if (wm->ir.state < 2)
-        {
-            /*
-             *	Only 1 known dot, so use just that.
-             */
-            for (i = 0; i < 4; ++i)
-            {
-                if (dot[i].visible)
-                {
-                    wm->ir.x = dot[i].x;
-                    wm->ir.y = dot[i].y;
-
-                    wm->ir.ax = wm->ir.x;
-                    wm->ir.ay = wm->ir.y;
-
-                    /*	can't calculate yaw because we don't have the distance */
-                    /* wm->orient.yaw = calc_yaw(&wm->ir); */
-
-                    ir_convert_to_vres(&wm->ir.x, &wm->ir.y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
-                    break;
-                }
-            }
-        } else
-        {
-            /*
-             *	Only see 1 dot but know theres 2.
-             *	Try to estimate where the other one
-             *	should be and use that.
-             */
-            for (i = 0; i < 4; ++i)
-            {
-                if (dot[i].visible)
-                {
-                    int ox = 0;
-                    int x, y;
-
-                    if (dot[i].order == 1)
-                    /* visible is the left dot - estimate where the right is */
-                    {
-                        ox = (int32_t)(dot[i].x + wm->ir.distance);
-                    } else if (dot[i].order == 2)
-                    /* visible is the right dot - estimate where the left is */
-                    {
-                        ox = (int32_t)(dot[i].x - wm->ir.distance);
-                    }
-
-                    x = ((signed int)dot[i].x + ox) / 2;
-                    y = dot[i].y;
-
-                    wm->ir.ax      = x;
-                    wm->ir.ay      = y;
-                    wm->orient.yaw = calc_yaw(&wm->ir);
-
-                    if (ir_correct_for_bounds(&x, &y, wm->ir.aspect, wm->ir.offset[0], wm->ir.offset[1]))
-                    {
-                        ir_convert_to_vres(&x, &y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
-                        wm->ir.x = x;
-                        wm->ir.y = y;
-                    }
-
-                    break;
-                }
-            }
-        }
-
-        break;
-    }
     case 2:
     case 3:
     case 4:
     {
-        /*
-         *	Two (or more) dots known and seen.
-         *	Average them together to estimate the true location.
-         */
-        int x, y;
         wm->ir.state = 2;
 
-        fix_rotated_ir_dots(wm->ir.dot, roll);
-
-        /* if there is at least 1 new dot, reorder them all */
+        /* Order the dots */
         if (wm->ir.num_dots > last_num_dots)
         {
             reorder_ir_dots(dot);
             wm->ir.x = 0;
             wm->ir.y = 0;
         }
-
-        wm->ir.distance = ir_distance(dot);
-        wm->ir.z        = 1023 - wm->ir.distance;
-
-        get_ir_dot_avg(wm->ir.dot, &x, &y);
-
-        wm->ir.ax      = x;
-        wm->ir.ay      = y;
-        wm->orient.yaw = calc_yaw(&wm->ir);
-
-        if (ir_correct_for_bounds(&x, &y, wm->ir.aspect, wm->ir.offset[0], wm->ir.offset[1]))
-        {
-            ir_convert_to_vres(&x, &y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
-            wm->ir.x = x;
-            wm->ir.y = y;
-        }
-
-        break;
     }
     default:
     {
