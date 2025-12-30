@@ -172,9 +172,6 @@ static void handle_wm_accel(struct wiimote_t *wm, byte *msg)
     wm->accel.y = msg[3];
     wm->accel.z = msg[4];
 
-    calculate_orientation(&wm->accel_calib, &wm->accel, &wm->orient,
-                        WIIMOTE_IS_FLAG_SET(wm, WIIUSE_SMOOTHING));
-
     /* calculate the gforces on each axis */
     calculate_gforce(&wm->accel_calib, &wm->accel, &wm->gforce);
 }
