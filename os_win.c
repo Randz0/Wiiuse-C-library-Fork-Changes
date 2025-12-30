@@ -254,10 +254,10 @@ int wiiuse_os_poll_single(wiimote* wm)
     int evnt = 0;
 
     wm->event = WIIUSE_NONE;
-    if (wiiuse_os_read(wm, read_buffer[0], sizeof(read_buffer))) 
+    if (wiiuse_os_read(wm, read_buffer, sizeof(read_buffer))) 
     {
         propagate_event(wm, read_buffer[0], read_buffer + 1);
-        evnt += (wm->event != WIIUSE_NONE);
+        evnt = (wm->event != WIIUSE_NONE);
     } 
     else
     {
