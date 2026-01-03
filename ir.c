@@ -258,40 +258,47 @@ void wiiuse_set_ir_position(struct wiimote_t *wm, enum ir_position_t pos)
     switch (pos)
     {
 
-    case WIIUSE_IR_ABOVE:
-        wm->ir.offset[0] = 0;
+        case WIIUSE_IR_ABOVE:
+            wm->ir.offset[0] = 0;
 
-        if (wm->ir.aspect == WIIUSE_ASPECT_16_9)
-        {
-            wm->ir.offset[1] = WM_ASPECT_16_9_Y / 2 - 70;
-        } else if (wm->ir.aspect == WIIUSE_ASPECT_4_3)
-        {
-            wm->ir.offset[1] = WM_ASPECT_4_3_Y / 2 - 100;
-        }
+            if (wm->ir.aspect == WIIUSE_ASPECT_16_9)
+            {
+                wm->ir.offset[1] = WM_ASPECT_16_9_Y / 2 - 70;
+            } else if (wm->ir.aspect == WIIUSE_ASPECT_4_3)
+            {
+                wm->ir.offset[1] = WM_ASPECT_4_3_Y / 2 - 100;
+            }
 
-        return;
+            return;
 
-    case WIIUSE_IR_BELOW:
-        wm->ir.offset[0] = 0;
+        case WIIUSE_IR_BELOW:
+            wm->ir.offset[0] = 0;
 
-        if (wm->ir.aspect == WIIUSE_ASPECT_16_9)
-        {
-            wm->ir.offset[1] = -WM_ASPECT_16_9_Y / 2 + 100;
-        } else if (wm->ir.aspect == WIIUSE_ASPECT_4_3)
-        {
-            wm->ir.offset[1] = -WM_ASPECT_4_3_Y / 2 + 70;
-        }
+            if (wm->ir.aspect == WIIUSE_ASPECT_16_9)
+            {
+                wm->ir.offset[1] = -WM_ASPECT_16_9_Y / 2 + 100;
+            } else if (wm->ir.aspect == WIIUSE_ASPECT_4_3)
+            {
+                wm->ir.offset[1] = -WM_ASPECT_4_3_Y / 2 + 70;
+            }
 
-        return;
+            return;
+        case WIIUSE_IR_CENTERED:
+            wm->ir.offset[0] = 0;
+            wm->ir.offset[1] = 0;
 
-    default:
-        return;
+            return;
+    
+        default:
+            return;
     };
 }
 
 /**
  *	@brief	Set the aspect ratio of the TV/monitor.
  *
+ *  Resets the internal vres and IR position
+ * 
  *	@param wm		Pointer to a wiimote_t structure.
  *	@param aspect	Either WIIUSE_ASPECT_16_9 or WIIUSE_ASPECT_4_3
  */
@@ -308,10 +315,14 @@ void wiiuse_set_aspect_ratio(struct wiimote_t *wm, enum aspect_t aspect)
     {
         wm->ir.vres[0] = WM_ASPECT_4_3_X;
         wm->ir.vres[1] = WM_ASPECT_4_3_Y;
-    } else
+    } else if (aspect == WIIUSE_ASPECT_16_9)
     {
         wm->ir.vres[0] = WM_ASPECT_16_9_X;
         wm->ir.vres[1] = WM_ASPECT_16_9_Y;
+    } else 
+    {
+        wm->ir.vres[0] = WM_ASPECT_FULL_IR_X;
+        wm->ir.vres[1] = WM_ASPECT_FULL_IR_Y;
     }
 
     /* reset the position offsets */
@@ -450,6 +461,8 @@ void calculate_extended_ir(struct wiimote_t *wm, byte *data)
     interpret_ir_data(wm);
 }
 
+#define clamp(a, b, c) max(min(c, b), a) // Clamps c between a -- b
+
 /**
  *	@brief Interpret IR data into more user friendly variables.
  *
@@ -459,8 +472,13 @@ static void interpret_ir_data(struct wiimote_t *wm)
 {
     struct ir_dot_t *dot = wm->ir.dot;
     int i;
+    float roll        = 0.0f;
     int last_num_dots = wm->ir.num_dots;
 
+    if (WIIMOTE_IS_SET(wm, WIIMOTE_STATE_ACC))
+    {
+        roll = wm->orient.roll;
+    }
 
     /* count visible dots */
     wm->ir.num_dots = 0;
@@ -474,43 +492,135 @@ static void interpret_ir_data(struct wiimote_t *wm)
 
     switch (wm->ir.num_dots)
     {
-    case 0:
-    {
-        wm->ir.state = 0;
-
-        /* reset the dot ordering */
-        for (i = 0; i < 4; ++i)
+        case 0:
         {
-            dot[i].order = 0;
-        }
+            wm->ir.state = 0;
 
-        wm->ir.x = 0;
-        wm->ir.y = 0;
-        wm->ir.z = 0.0f;
+            /* reset the dot ordering */
+            for (i = 0; i < 4; ++i)
+            {
+                dot[i].order = 0;
+            }
 
-        return;
-    }
-    case 1:
-    case 2:
-    case 3:
-    case 4:
-    {
-        wm->ir.state = 2;
-
-        /* Order the dots */
-        if (wm->ir.num_dots > last_num_dots)
-        {
-            reorder_ir_dots(dot);
             wm->ir.x = 0;
             wm->ir.y = 0;
+            wm->ir.z = 0.0f;
+
+            return;
+        }
+        case 1:
+        {
+            fix_rotated_ir_dots(wm->ir.dot, roll);
+
+            if (wm->ir.state < 2)
+            {
+                /*
+                 *	Only 1 known dot, so use just that.
+                 */
+                for (i = 0; i < 4; ++i)
+                {
+                    if (dot[i].visible)
+                    {
+                        wm->ir.x = dot[i].x;
+                        wm->ir.y = dot[i].y;
+
+                        wm->ir.ax = wm->ir.x;
+                        wm->ir.ay = wm->ir.y;
+
+                        /*	can't calculate yaw because we don't have the distance */
+                        /* wm->orient.yaw = calc_yaw(&wm->ir); */
+
+                        ir_convert_to_vres(&wm->ir.x, &wm->ir.y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
+                        break;
+                    }
+                }
+            } else
+            {
+                /*
+                 *	Only see 1 dot but know theres 2.
+                 *	Try to estimate where the other one
+                 *	should be and use that.
+                 */
+                for (i = 0; i < 4; ++i)
+                {
+                    if (dot[i].visible)
+                    {
+                        int ox = 0;
+                        int x, y;
+
+                        if (dot[i].order == 1)
+                        /* visible is the left dot - estimate where the right is */
+                        {
+                            ox = (int32_t)(dot[i].x + wm->ir.distance);
+                        } else if (dot[i].order == 2)
+                        /* visible is the right dot - estimate where the left is */
+                        {
+                            ox = (int32_t)(dot[i].x - wm->ir.distance);
+                        }
+
+                        x = ((signed int)dot[i].x + ox) / 2;
+                        y = dot[i].y;
+
+                        wm->ir.ax      = x;
+                        wm->ir.ay      = y;
+                        wm->orient.yaw = calc_yaw(&wm->ir);
+
+                        if (ir_correct_for_bounds(&x, &y, wm->ir.aspect, wm->ir.offset[0], wm->ir.offset[1]))
+                        {
+                            ir_convert_to_vres(&x, &y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
+                            wm->ir.x = x;
+                            wm->ir.y = y;
+                        }
+
+                        break;
+                    }
+                }
+            }
+
+            break;
+        }
+        case 2:
+        case 3:
+        case 4:
+        {
+            /*
+             *	Two (or more) dots known and seen.
+             *	Average them together to estimate the true location.
+             */
+            int x, y;
+            wm->ir.state = 2;
+
+            fix_rotated_ir_dots(wm->ir.dot, roll);
+
+            /* if there is at least 1 new dot, reorder them all */
+            if (wm->ir.num_dots > last_num_dots)
+            {
+                reorder_ir_dots(dot);
+            }
+
+            wm->ir.distance = ir_distance(dot);
+            wm->ir.z        = 1023 - wm->ir.distance;
+
+            get_ir_dot_avg(wm->ir.dot, &x, &y);
+
+            wm->ir.ax      = x;
+            wm->ir.ay      = y;
+            wm->orient.yaw = calc_yaw(&wm->ir);
+
+            if (ir_correct_for_bounds(&x, &y, wm->ir.aspect, wm->ir.offset[0], wm->ir.offset[1]))
+            {
+                ir_convert_to_vres(&x, &y, wm->ir.aspect, wm->ir.vres[0], wm->ir.vres[1]);
+                wm->ir.x = x;
+                wm->ir.y = y;
+            }
+
+            break;
+        }
+        default:
+        {
+            break;
         }
     }
-    default:
-    {
-        break;
-    }
-    }
-
 #ifdef WITH_WIIUSE_DEBUG
     {
         int ir_level;
@@ -694,8 +804,10 @@ static float ir_distance(struct ir_dot_t *dot)
  *	@param offset_x	The X offset of the bounding box.
  *	@param offset_y	The Y offset of the bounding box.
  *
- *	@return Returns 1 if the point is valid and was updated.
+ *	@return Returns 1 if the point is valid.
  *
+ *  Also maps the x,y coord to the bounding box
+ * 
  *	Nintendo was smart with this bit. They sacrifice a little
  *	precision for a big increase in usability.
  */
@@ -708,24 +820,23 @@ static int ir_correct_for_bounds(int *x, int *y, enum aspect_t aspect, int offse
     {
         xs = WM_ASPECT_16_9_X;
         ys = WM_ASPECT_16_9_Y;
-    } else
+    } else if (aspect == WIIUSE_ASPECT_4_3)
     {
         xs = WM_ASPECT_4_3_X;
         ys = WM_ASPECT_4_3_Y;
-    }
-
-    x0 = ((1024 - xs) / 2) + offset_x;
-    y0 = ((768 - ys) / 2) + offset_y;
-
-    if ((*x >= x0) && (*x <= (x0 + xs)) && (*y >= y0) && (*y <= (y0 + ys)))
+    } else
     {
-        *x -= offset_x;
-        *y -= offset_y;
-
-        return 1;
+        xs = WM_ASPECT_FULL_IR_X;
+        ys = WM_ASPECT_FULL_IR_Y;
     }
 
-    return 0;
+    x0 = ((WM_ASPECT_FULL_IR_X - xs) / 2) + offset_x;
+    y0 = ((WM_ASPECT_FULL_IR_Y - ys) / 2) + offset_y;
+
+    *x -= offset_x;
+    *y -= offset_y;
+
+    return ((*x >= x0) && (*x <= (x0 + xs)) && (*y >= y0) && (*y <= (y0 + ys)));
 }
 
 /**
@@ -739,14 +850,18 @@ static void ir_convert_to_vres(int *x, int *y, enum aspect_t aspect, int vx, int
     {
         xs = WM_ASPECT_16_9_X;
         ys = WM_ASPECT_16_9_Y;
-    } else
+    } else if (aspect == WIIUSE_ASPECT_4_3)
     {
         xs = WM_ASPECT_4_3_X;
         ys = WM_ASPECT_4_3_Y;
+    } else
+    {
+        xs = WM_ASPECT_FULL_IR_X;
+        ys = WM_ASPECT_FULL_IR_Y;
     }
 
-    *x -= ((1024 - xs) / 2);
-    *y -= ((768 - ys) / 2);
+    *x -= ((WM_ASPECT_FULL_IR_X - xs) / 2);
+    *y -= ((WM_ASPECT_FULL_IR_Y - ys) / 2);
 
     *x = (int)((*x / (float)xs) * vx);
     *y = (int)((*y / (float)ys) * vy);

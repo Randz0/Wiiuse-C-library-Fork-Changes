@@ -243,7 +243,7 @@
 /** @} */
 
 /** @brief IR correction types */
-typedef enum ir_position_t { WIIUSE_IR_ABOVE, WIIUSE_IR_BELOW } ir_position_t;
+typedef enum ir_position_t { WIIUSE_IR_ABOVE, WIIUSE_IR_BELOW, WIIUSE_IR_CENTERED } ir_position_t;
 
 /** @name Device Inquiry Macros */
 /** @{ */
@@ -463,7 +463,7 @@ typedef struct ir_dot_t
 /**
  *	@brief Screen aspect ratio.
  */
-typedef enum aspect_t { WIIUSE_ASPECT_4_3, WIIUSE_ASPECT_16_9 } aspect_t;
+typedef enum aspect_t { WIIUSE_ASPECT_4_3, WIIUSE_ASPECT_16_9, WIIUSE_ASPECT_FULL_IR } aspect_t;
 
 /**
  *	@brief IR struct. Hold all data related to the IR tracking.

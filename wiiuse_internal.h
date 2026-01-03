@@ -211,6 +211,8 @@
 #define WM_ASPECT_16_9_Y 370
 #define WM_ASPECT_4_3_X 560
 #define WM_ASPECT_4_3_Y 420
+#define WM_ASPECT_FULL_IR_X 1024
+#define WM_ASPECT_FULL_IR_Y 768
 
 /**
  *	Expansion stuff

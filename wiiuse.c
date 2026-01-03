@@ -149,7 +149,7 @@ struct wiimote_t **wiiuse_init(int wiimotes)
         wm[i] = (struct wiimote_t *)malloc(sizeof(struct wiimote_t));
         memset(wm[i], 0, sizeof(struct wiimote_t));
 
-        wm[i]->unid = i + 1;
+        wm[i]->unid = i;
         wiiuse_init_platform_fields(wm[i]);
 
         wm[i]->state = WIIMOTE_INIT_STATES;
@@ -310,7 +310,8 @@ void wiiuse_motion_sensing(struct wiimote_t *wm, int status)
         WIIMOTE_DISABLE_STATE(wm, WIIMOTE_STATE_ACC);
     }
 
-    wiiuse_set_report_type(wm);
+    int setReportType = wiiuse_set_report_type(wm);
+    printf("set to report type %d \n", setReportType);
 }
 
 /**
